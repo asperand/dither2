@@ -4,6 +4,8 @@ use std::fs::File;
 use std::env;
 use std::vec::Vec;
 use std::io;
+use rgb::RGB;
+use imgref::*;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
