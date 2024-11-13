@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::io::BufRead;
-use crate::native::open_image;
 use std::fs::File;
-use photon_rs::native;
 use std::env;
 use std::vec::Vec;
 use std::io;
@@ -23,7 +21,7 @@ fn main() {
         user_palette.push(0xFFFFFF);
         user_palette.push(0x000000);
     }
-    let image_file = load_file(file_path).expect("Couldn't load file.");
+    let image_file = load_file(file_path);
     let color_replaced_image = color_replacement(image_file,user_palette);
 }
 
@@ -53,9 +51,8 @@ where P: AsRef<Path>, {
 
 /// Load our image file using photon.
 
-fn load_file(file_path:&String) -> Result<photon_rs::PhotonImage,photon_rs::native::Error> {
-    let img_result = open_image(file_path)?;
-    Ok(img_result)
+fn load_file(file_path:&String){
+    
 }
 
 /// Finds the nearest color in the given palette.
@@ -68,6 +65,8 @@ fn load_file(file_path:&String) -> Result<photon_rs::PhotonImage,photon_rs::nati
 
 fn find_nearest_color(current_color:Vec<u8>,user_palette:Vec<i32>){
 
+
+
 }
 
 /// The function that replaces colors of an image to their nearest palette pairing.
@@ -79,10 +78,20 @@ fn find_nearest_color(current_color:Vec<u8>,user_palette:Vec<i32>){
 ///
 /// Repeat ad nausem
 
-fn color_replacement(image_file:photon_rs::PhotonImage,user_palette:Vec<i32>){
-    let raw_image = image_file.get_raw_pixels();
-    for pixel in raw_image {
-        // formatted directly into R,G,B,A,R,G,B,A......
-    }
-}
+fn color_replacement(image_file:(),user_palette:Vec<i32>){
+ // stepping by four to group pixel.
+        /* PSEUDOCODE
+            
+            GRAB CURRENT PIXEL VALUES FROM RAW_IMAGE
+            PASS TO FIND_NEAREST_COLOR, WHICH RETURNS A SINGLE COLOR
 
+            1. EDIT RAW_IMAGE AND REPLACE VALUES
+
+            2. CREATE A NEW RAW IMAGE VECTOR
+
+
+
+        */
+
+    // FINALLY, CREATE NEW IMAGE FROM NEW RAW DATA
+}
