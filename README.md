@@ -11,7 +11,7 @@ rgb objects seems cleaner and easier to follow. I'm trying to make my code clean
 
 USAGE:
 
-dither2 [IMAGE FILE] [PALETTE FILE (optional]
+dither2 [IMAGE FILE] [PALETTE FILE (optional)]
 
 EXAMPLES:
 
