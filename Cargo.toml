@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 rgb = "0.8.50"
-imgref = "1.11.0"
+image = "0.25.5"

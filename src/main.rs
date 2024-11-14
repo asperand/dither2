@@ -1,43 +1,39 @@
+use image::ImageReader;
+use image::ImageBuffer;
 use std::path::Path;
 use std::io::BufRead;
 use std::fs::File;
-use std::env;
 use std::vec::Vec;
 use std::io;
 use rgb::RGB;
-use imgref::*;
+use image::open;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let file_path = &args[1];
-    let palette_path = &args[2];
-    println!("{}", file_path);
-    println!("{}", palette_path);
-    let mut user_palette = Vec::new();
-    if let Ok(lines) = setup_palette(palette_path){
-        for line in lines.flatten(){
-            user_palette.push(i32::from_str_radix(&line,16).expect("Couldn't read hex values from file."))
-        }
-    }
-    else{ // If the user file doesn't exist or can't be loaded, create a default monochrome palette.
-        user_palette.push(0xFFFFFF);
-        user_palette.push(0x000000);
-    }
-    let image_file = load_file(file_path);
-    let color_replaced_image = color_replacement(image_file,user_palette);
+    let _args = std::env::args();
+    let file_path = std::env::args().nth(1).expect("No image file provided");
+    let palette_path = match std::env::args().nth(2) { // Check if palette file was provided.
+        Some(palette_path) => palette_path,
+        None => " ".to_string(),
+    };
+    let user_palette_result = setup_palette(palette_path);
+    let user_palette = match user_palette_result { // Handling for no file found.
+        Ok(user_palette) => user_palette,
+        Err(_) => vec![RGB{r:3,g:3,b:3},RGB{r:255,g:255,b:255}],
+    };
+    let image_rgb_vec = load_file(&file_path).expect("Couldn't open file");
+    let color_replaced_image = color_replacement(image_rgb_vec,user_palette);
 }
 
 
 /// Sets up the color palette for color reduction in the image.
 ///
-/// Takes in any file, but expects hexcode values.
-/// Will ignore any "junk" found in the file, but does minimal
-/// checking otherwise. It is up to the user to provide a clean
-/// color palette.
+/// Expects hexcode values written in 6 characters with no
+/// other formatting such as '0x' or '#'. Will skip bad
+/// lines, but will not fix them.
 ///
 /// # Example of a good palette file:
 ///
-/// colors.hex ()
+/// colors.hex
 /// --------------------------------
 /// 00FFFF
 /// FFFFFF
@@ -45,18 +41,49 @@ fn main() {
 /// FF00FF
 /// --------------------------------
 
-fn setup_palette<P>(file_path: P) -> io::Result<io::Lines<io::BufReader<File>>>
+fn setup_palette<P>(palette_path: P) -> Result<Vec<RGB<u8>>,std::io::Error>
 where P: AsRef<Path>, {
-    let file = File::open(file_path)?;
-    Ok(io::BufReader::new(file).lines())
+    let mut new_color = Vec::new();
+    let mut user_palette = Vec::new();
+    let file = File::open(palette_path)?;
+    let lines = io::BufReader::new(file).lines();
+    for line in lines.flatten(){
+        if line.chars().any(|c| c.is_ascii_hexdigit()) == false || line.len() != 6 {
+            continue; // Skip the current line if it doesn't meet our standards.
+        }
+        let mut cur = line.clone();
+        while !cur.is_empty(){ // Recursive sub-string splitting.
+            let (color, rest) = cur.split_at(2);
+            new_color.push(u8::from_str_radix(color,16).unwrap());
+            cur = rest.to_string();
+        }
+        let pal_rgb = RGB {r:new_color[0], g:new_color[1], b:new_color[2]};
+        user_palette.push(pal_rgb);
+        new_color.clear();
+    }
+    if user_palette.is_empty(){ // Only fires if there were no valid colors in the file.
+        user_palette.push(RGB{r:3,g:3,b:3});
+        user_palette.push(RGB{r:255,g:255,b:255});
+        println!("No valid colors found, default palette will be used.");
+    }
+    Ok(user_palette)
 }
 
-/// Load our image file using photon.
+/// Load our image file and turn it into a RAW Vec<u8>,
+/// and then turn it into a vector of RGB pixels.
+///
+/// This is not to be mistaken with image::Rgb!
+/// This program uses rgb::RGB pixels so we can actually
+/// do math on them through rgb's functions.
 
-fn load_file(file_path:&String){
-    
+fn load_file(file_path : &String ) -> Result<Vec<rgb::Rgb<u8>>,image::error::ImageError>{
+    let mut image_rgb_vec = Vec::new();
+    let image_file = open(file_path)?.to_rgb8().into_raw(); // Converting DynamicImage into a raw u8 sequence.
+    for i in (0..image_file.len()).step_by(3) { // For each 3 channel groupings, put them into a Vec.
+        image_rgb_vec.push(RGB{r:image_file[i],g:image_file[i+1],b:image_file[i+2]});
+    }
+    Ok(image_rgb_vec)
 }
-
 /// Finds the nearest color in the given palette.
 ///
 /// Uses a weighted Euclidean Distance formula in 3d...
@@ -65,7 +92,7 @@ fn load_file(file_path:&String){
 ///
 /// With standard color weighting: r*0.3, g*0.59, b*0.11.
 
-fn find_nearest_color(current_color:Vec<u8>,user_palette:Vec<i32>){
+fn find_nearest_color(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>){
 
 
 
@@ -80,7 +107,7 @@ fn find_nearest_color(current_color:Vec<u8>,user_palette:Vec<i32>){
 ///
 /// Repeat ad nausem
 
-fn color_replacement(image_file:(),user_palette:Vec<i32>){
+fn color_replacement(image_rgb_vec:Vec<RGB<u8>>,user_palette:Vec<RGB<u8>>){
  // stepping by four to group pixel.
         /* PSEUDOCODE
             
