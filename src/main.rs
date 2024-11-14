@@ -1,6 +1,7 @@
+use std::ops::Add;
+use rgb::ComponentMap;
+use std::ops::Sub;
 use image::Rgb;
-use image::codecs::png::PngEncoder;
-use image::ImageReader;
 use image::ImageBuffer;
 use std::path::Path;
 use std::io::BufRead;
@@ -10,6 +11,7 @@ use std::io;
 use rgb::RGB;
 use image::open;
 
+/// TODO: Add flags for choosing dithering or simple color replacement. -fs or -cr ?
 fn main() {
     let _args = std::env::args();
     let file_path = std::env::args().nth(1).expect("No image file provided");
@@ -23,8 +25,9 @@ fn main() {
         Err(_) => vec![RGB{r:3,g:3,b:3},RGB{r:255,g:255,b:255}],
     };
     let mut image_tp = load_file(&file_path).expect("Couldn't open file"); // Get our tuple of the image sequence, height, and width.
-    let color_replaced_image = simple_color_replacement(&mut image_tp.0,user_palette); // perform a simple color replacement on our image
-    let new_raw = to_raw_from_rgb(color_replaced_image); // create a raw sequence of u8 from our object.
+    // let color_replaced_image = simple_color_replacement(&mut image_tp.0,user_palette); // perform a simple color replacement on our image
+    let dithered_image = dither_image_fs(&mut image_tp.0,image_tp.2,user_palette);
+    let new_raw = to_raw_from_rgb(dithered_image); // create a raw sequence of u8 from our object.
     let new_buffer: ImageBuffer<Rgb<u8>, _> =ImageBuffer::from_raw(image_tp.2,image_tp.1,new_raw).unwrap();
     let _ = match new_buffer.save("./dither.png") {
         Err(_) => println!("Couldn't save image buffer"),
@@ -107,8 +110,11 @@ fn find_nearest_color(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8
     let mut lowest = 0;
     let mut max_distance = 441.672956; // max possible distance in a 256x256x256 box
     for i in 0..user_palette.len() {
-        // monster line incoming
-        let eu_distance = (((current_color.r as f32 - user_palette[i].r as f32) * 0.3).powi(2)+((current_color.g as f32 - user_palette[i].g as f32) * 0.59).powi(2)+((current_color.b as f32 - user_palette[i].b as f32) * 0.11).powi(2)).sqrt();
+        let eu_distance = 
+            (((current_color.r as f32 - user_palette[i].r as f32) * 0.3).powi(2)
+            +((current_color.g as f32 - user_palette[i].g as f32) * 0.59).powi(2)
+            +((current_color.b as f32 - user_palette[i].b as f32) * 0.11).powi(2))
+            .sqrt();
         if eu_distance < max_distance {
             max_distance = eu_distance;
             lowest = i;
@@ -128,22 +134,43 @@ fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB
     return image_rgb_vec.to_vec()
 }
 
-/// TODO:
-/// This might be difficult. We need to ensure we are hitting 
-/// the right pixels when doing our error diffusion because
-/// the image is in a raw sequence of pixels. Thus, we cannot
-/// refer to x/y coordinates alone.
+/// This function iterates through each pixel of our image vector,
+/// doing a basic color replacement and then diffusing the error throughout
+/// the nearby pixels.
 ///
-///
-/// 0  1  2  3  4  5  6
-/// 7  8  9  10 11 12 13
-/// 14 15 16 17 18 19 20
-/// 21 22 23 24 25 26 27
-///
+/// Has protection for wrapping on x+1 or x-1 pixels, but needs over/underflow protection
+/// on addition and subtraction on RGB values.
 /// 
-fn dither_image(image_rgb_vec:Vec<RGB<u8>>,height:u32,width:u32, user_palette:Vec<RGB<u8>>){
-    
+fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>,width:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
+    let mut wrapper_left = true;
+    let mut wrapper_right = false;
+    for i in 0..(image_rgb_vec.len()){ // For every pixel in the image
+        let i_a = i as u32;
+        let new_color = find_nearest_color(image_rgb_vec[i],user_palette.clone()); // find nearest color in palette
+        
+        // TODO: FIX OVERFLOWING ON SUB, LIKELY ON ADD TOO
+        let quant_err = image_rgb_vec[i].sub(new_color); // quant error calc
 
+        image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].add( // [x][y+1]
+                quant_err.map(|p| (p as f32 * (0.3125)).round() as u8)); // 5/16
+        if !wrapper_right { // if we are at the rightmost end
+            image_rgb_vec[i+1] = image_rgb_vec[i+1].add( // [x+1],[y]
+                quant_err.map(|p| (p as f32 * (0.4375)).round() as u8)); // 7/16
+            image_rgb_vec[(i_a + (width+1)) as usize] = image_rgb_vec[(i_a + (width+1)) as usize].add( // [x+1][y+1]
+                quant_err.map(|p| (p as f32 * (0.0625)).round() as u8)); // 1/16
+        }
+        if !wrapper_left{ // if we are at the leftmost end
+            image_rgb_vec[(i_a + (width-1)) as usize] = image_rgb_vec[(i_a + (width-1)) as usize].add( // [x-1][y+1]
+                quant_err.map(|p| (p as f32 * (0.1875)).round() as u8)); // 3/16
+        }
+        if (i_a+1) % width == 0{ // we are at the left starting next loop
+            wrapper_left = true;
+        }
+        if (i_a+2) % width == 0{ // we are at the right starting next loop
+            wrapper_right = true;
+        }
+    }
+    return image_rgb_vec.to_vec()
 }
 
 /// Convert our vector of RGBs into a raw u8 sequence that the Image crate can work with.
