@@ -15,6 +15,6 @@ dither2 [IMAGE FILE] [PALETTE FILE (optional)]
 
 EXAMPLES:
 
-dither2 /home/User/Pictures/example.png /home/User/Downloads/palette.hex
+./dither2 ./test_files/test_image.jpg ./test_files/vga.hex
 
-dither2 ./picture.jpg
+./dither2 ./test_image.jpg
