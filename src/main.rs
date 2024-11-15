@@ -132,6 +132,29 @@ fn load_file(file_path : &String ) -> Result<(Vec<rgb::Rgb<u8>>, u32 ,u32),image
 ///
 /// With standard color weighting: r*0.3, g*0.59, b*0.11.
 
+fn find_nearest_color_weighted(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8> {
+    let mut lowest = 0;
+    let mut max_distance = 441.672956; // max possible distance in a 256x256x256 box
+    for i in 0..user_palette.len() {
+        let eu_distance = 
+            (((current_color.r as f32 - user_palette[i].r as f32) * 0.3).powi(2)
+            +((current_color.g as f32 - user_palette[i].g as f32) * 0.59).powi(2)
+            +((current_color.b as f32 - user_palette[i].b as f32) * 0.11).powi(2))
+            .sqrt();
+        if eu_distance < max_distance {
+            max_distance = eu_distance;
+            lowest = i;
+        }        
+    }
+    return user_palette[lowest] // return our new color
+}
+
+/// This function is identical to the one above, except it does not use color weighting.
+///
+/// It may produce different results.
+///
+/// TODO: use a flag to differentiate? maybe?
+
 fn find_nearest_color(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8> {
     let mut lowest = 0;
     let mut max_distance = 441.672956; // max possible distance in a 256x256x256 box
@@ -155,7 +178,7 @@ fn find_nearest_color(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8
 
 fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     for i in 0..image_rgb_vec.len(){
-        image_rgb_vec[i] = find_nearest_color(image_rgb_vec[i],user_palette.clone());
+        image_rgb_vec[i] = find_nearest_color_weighted(image_rgb_vec[i],user_palette.clone());
     }
     return image_rgb_vec.to_vec()
 }
@@ -166,7 +189,7 @@ fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB
 ///
 /// Has protection for wrapping on x+1 or x-1 pixels.
 ///
-/// TODO: Something is very wrong with the logic! this will need a re-write.
+/// TODO: refactor this? There's a bit of a problem with how BIG this function is, and how slow it is.
 /// 
 fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     let mut wrapper_left = true;
@@ -178,8 +201,8 @@ fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_
     for i in 0..(image_rgb_vec.len()-1){ // For every pixel in the image
         let i_a = i as u32;
         let new_color = find_nearest_color(image_rgb_vec[i],user_palette.clone()); // find nearest color in palette
-        image_rgb_vec[i] = new_color;
         let quant_err = image_rgb_vec[i].saturating_sub(new_color); // quant error calc
+        image_rgb_vec[i] = new_color;
         if !wrapper_end { // if we are not at the bottom
             image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].saturating_add( // [x][y+1]
                 quant_err.map(|p| (p as f32 * (0.3125)).round() as u8)); // 5/16

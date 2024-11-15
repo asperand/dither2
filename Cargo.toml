@@ -6,4 +6,3 @@ edition = "2021"
 [dependencies]
 rgb = "0.8.50"
 image = "0.25.5"
-num-traits = "0.2.19"
