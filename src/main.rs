@@ -1,6 +1,4 @@
-use std::ops::Add;
 use rgb::ComponentMap;
-use std::ops::Sub;
 use image::Rgb;
 use image::ImageBuffer;
 use std::path::Path;
@@ -11,6 +9,34 @@ use std::io;
 use rgb::RGB;
 use image::open;
 
+/// Implementing saturating add and subtraction to
+/// RGB types. This is done because the RGB crate only
+/// has non-saturating adds/subs which leads to overflows
+/// relatively easily.
+trait RgbSatAdd {
+  fn saturating_add(self, other: Self) -> Self;
+}
+trait RgbSatSub {
+    fn saturating_sub(self, other: Self) -> Self;
+}
+impl RgbSatAdd for rgb::Rgb<u8> {
+  fn saturating_add(self, other: Self) -> Self {
+    rgb::Rgb {
+      r: self.r.saturating_add(other.r),
+      g: self.g.saturating_add(other.g),
+      b: self.b.saturating_add(other.b),
+    }
+  }
+}
+impl RgbSatSub for rgb::RGB<u8> {
+    fn saturating_sub(self, other: Self) -> Self {
+        rgb::RGB {
+            r: self.r.saturating_sub(other.r),
+        g: self.g.saturating_sub(other.g),
+        b: self.b.saturating_sub(other.b),
+        }
+    }
+}
 /// TODO: Add flags for choosing dithering or simple color replacement. -fs or -cr ?
 fn main() {
     let _args = std::env::args();
@@ -138,14 +164,15 @@ fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB
 /// doing a basic color replacement and then diffusing the error throughout
 /// the nearby pixels.
 ///
-/// Has protection for wrapping on x+1 or x-1 pixels, but needs over/underflow protection
-/// on addition and subtraction on RGB values.
+/// Has protection for wrapping on x+1 or x-1 pixels.
+///
+/// TODO: Something is very wrong with the logic! this will need a re-write.
 /// 
 fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     let mut wrapper_left = true;
     let mut wrapper_right = false;
     let mut wrapper_end = false;
-    if height == 1{ // if the image is 1 pixel tall we start at the bottom
+    if height == 1 { // if the image is 1 pixel tall we start at the bottom
         wrapper_end = true;
     }
     for i in 0..(image_rgb_vec.len()-1){ // For every pixel in the image
@@ -153,28 +180,34 @@ fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_
         let new_color = find_nearest_color(image_rgb_vec[i],user_palette.clone()); // find nearest color in palette
         // TODO: FIX OVERFLOWING ON SUB, LIKELY ON ADD TOO
         // We will make an "extention trait" for satsub() and satadd() according to IRC
-        let quant_err = image_rgb_vec[i].sub(new_color); // quant error calc
+        let quant_err = image_rgb_vec[i].saturating_sub(new_color); // quant error calc
         if !wrapper_end { // if we are not at the bottom
-            image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].add( // [x][y+1]
+            image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].saturating_add( // [x][y+1]
                 quant_err.map(|p| (p as f32 * (0.3125)).round() as u8)); // 5/16
         }
         if !wrapper_right { // if we are not at the rightmost end
-            image_rgb_vec[i+1] = image_rgb_vec[i+1].add( // [x+1],[y]
+            image_rgb_vec[i+1] = image_rgb_vec[i+1].saturating_add( // [x+1],[y]
                 quant_err.map(|p| (p as f32 * (0.4375)).round() as u8)); // 7/16
         }
-        if !wrapper_right || !wrapper_end { // if we are either not at the rightmost end or at the bottom
-            image_rgb_vec[(i_a + (width+1)) as usize] = image_rgb_vec[(i_a + (width+1)) as usize].add( // [x+1][y+1]
+        if !wrapper_right && !wrapper_end { // if we are either not at the rightmost end or at the bottom
+            image_rgb_vec[(i_a + (width+1)) as usize] = image_rgb_vec[(i_a + (width+1)) as usize].saturating_add( // [x+1][y+1]
                 quant_err.map(|p| (p as f32 * (0.0625)).round() as u8)); // 1/16
         }
-        if !wrapper_left || !wrapper_end { // if we are not at the leftmost end or at the bottom
-            image_rgb_vec[(i_a + (width-1)) as usize] = image_rgb_vec[(i_a + (width-1)) as usize].add( // [x-1][y+1]
+        if !wrapper_left && !wrapper_end { // if we are not at the leftmost end or at the bottom
+            image_rgb_vec[(i_a + (width-1)) as usize] = image_rgb_vec[(i_a + (width-1)) as usize].saturating_add( // [x-1][y+1]
                 quant_err.map(|p| (p as f32 * (0.1875)).round() as u8)); // 3/16
         }
         if (i_a+1) % width == 0{ // we are at the left starting next loop
             wrapper_left = true;
         }
+        else {
+            wrapper_left = false;
+        }
         if (i_a+2) % width == 0{ // we are at the right starting next loop
             wrapper_right = true;
+        }
+        else{
+            wrapper_right = false;
         }
         if i_a+1 >= width*(height-1) { // we are at the bottom starting next loop
             wrapper_end = true;
