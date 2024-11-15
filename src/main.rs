@@ -26,7 +26,7 @@ fn main() {
     };
     let mut image_tp = load_file(&file_path).expect("Couldn't open file"); // Get our tuple of the image sequence, height, and width.
     // let color_replaced_image = simple_color_replacement(&mut image_tp.0,user_palette); // perform a simple color replacement on our image
-    let dithered_image = dither_image_fs(&mut image_tp.0,image_tp.2,user_palette);
+    let dithered_image = dither_image_fs(&mut image_tp.0,image_tp.2,image_tp.1,user_palette);
     let new_raw = to_raw_from_rgb(dithered_image); // create a raw sequence of u8 from our object.
     let new_buffer: ImageBuffer<Rgb<u8>, _> =ImageBuffer::from_raw(image_tp.2,image_tp.1,new_raw).unwrap();
     let _ = match new_buffer.save("./dither.png") {
@@ -141,25 +141,32 @@ fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB
 /// Has protection for wrapping on x+1 or x-1 pixels, but needs over/underflow protection
 /// on addition and subtraction on RGB values.
 /// 
-fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>,width:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
+fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     let mut wrapper_left = true;
     let mut wrapper_right = false;
-    for i in 0..(image_rgb_vec.len()){ // For every pixel in the image
+    let mut wrapper_end = false;
+    if height == 1{ // if the image is 1 pixel tall we start at the bottom
+        wrapper_end = true;
+    }
+    for i in 0..(image_rgb_vec.len()-1){ // For every pixel in the image
         let i_a = i as u32;
         let new_color = find_nearest_color(image_rgb_vec[i],user_palette.clone()); // find nearest color in palette
-        
         // TODO: FIX OVERFLOWING ON SUB, LIKELY ON ADD TOO
+        // We will make an "extention trait" for satsub() and satadd() according to IRC
         let quant_err = image_rgb_vec[i].sub(new_color); // quant error calc
-
-        image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].add( // [x][y+1]
+        if !wrapper_end { // if we are not at the bottom
+            image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].add( // [x][y+1]
                 quant_err.map(|p| (p as f32 * (0.3125)).round() as u8)); // 5/16
-        if !wrapper_right { // if we are at the rightmost end
+        }
+        if !wrapper_right { // if we are not at the rightmost end
             image_rgb_vec[i+1] = image_rgb_vec[i+1].add( // [x+1],[y]
                 quant_err.map(|p| (p as f32 * (0.4375)).round() as u8)); // 7/16
+        }
+        if !wrapper_right || !wrapper_end { // if we are either not at the rightmost end or at the bottom
             image_rgb_vec[(i_a + (width+1)) as usize] = image_rgb_vec[(i_a + (width+1)) as usize].add( // [x+1][y+1]
                 quant_err.map(|p| (p as f32 * (0.0625)).round() as u8)); // 1/16
         }
-        if !wrapper_left{ // if we are at the leftmost end
+        if !wrapper_left || !wrapper_end { // if we are not at the leftmost end or at the bottom
             image_rgb_vec[(i_a + (width-1)) as usize] = image_rgb_vec[(i_a + (width-1)) as usize].add( // [x-1][y+1]
                 quant_err.map(|p| (p as f32 * (0.1875)).round() as u8)); // 3/16
         }
@@ -168,6 +175,9 @@ fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>,width:u32, user_palette:Vec<R
         }
         if (i_a+2) % width == 0{ // we are at the right starting next loop
             wrapper_right = true;
+        }
+        if i_a+1 >= width*(height-1) { // we are at the bottom starting next loop
+            wrapper_end = true;
         }
     }
     return image_rgb_vec.to_vec()
