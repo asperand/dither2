@@ -51,8 +51,8 @@ fn main() {
         Err(_) => vec![RGB{r:3,g:3,b:3},RGB{r:255,g:255,b:255}],
     };
     let mut image_tp = load_file(&file_path).expect("Couldn't open file"); // Get our tuple of the image sequence, height, and width.
-    // let color_replaced_image = simple_color_replacement(&mut image_tp.0,user_palette); // perform a simple color replacement on our image
-    let dithered_image = dither_image_fs(&mut image_tp.0,image_tp.2,image_tp.1,user_palette);
+    // simple_color_replacement(&mut image_tp.0,user_palette), // perform a simple color replacement
+    let dithered_image = dither_image_fs(&mut image_tp.0,image_tp.2,image_tp.1,user_palette); // perform floyd-steinberg dithering
     let new_raw = to_raw_from_rgb(dithered_image); // create a raw sequence of u8 from our object.
     let new_buffer: ImageBuffer<Rgb<u8>, _> =ImageBuffer::from_raw(image_tp.2,image_tp.1,new_raw).unwrap();
     let _ = match new_buffer.save("./dither.png") {
@@ -132,7 +132,7 @@ fn load_file(file_path : &String ) -> Result<(Vec<rgb::Rgb<u8>>, u32 ,u32),image
 ///
 /// With standard color weighting: r*0.3, g*0.59, b*0.11.
 
-fn find_nearest_color_weighted(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8> {
+fn find_nearest_color(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8> {
     let mut lowest = 0;
     let mut max_distance = 441.672956; // max possible distance in a 256x256x256 box
     for i in 0..user_palette.len() {
@@ -148,6 +148,8 @@ fn find_nearest_color_weighted(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) 
     }
     return user_palette[lowest] // return our new color
 }
+
+/* These functions are not used currently. They will be commented out.
 
 /// This function is identical to the one above, except it does not use color weighting.
 ///
@@ -172,16 +174,19 @@ fn find_nearest_color(current_color:RGB<u8>,user_palette:Vec<RGB<u8>>) -> RGB<u8
     return user_palette[lowest] // return our new color
 }
 
+
 /// The function that replaces colors of an image to their nearest palette pairing.
 ///
 /// Uses find_nearest_color per pixel.
 
 fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     for i in 0..image_rgb_vec.len(){
-        image_rgb_vec[i] = find_nearest_color_weighted(image_rgb_vec[i],user_palette.clone());
+        image_rgb_vec[i] = find_nearest_color(image_rgb_vec[i],user_palette.clone());
     }
     return image_rgb_vec.to_vec()
 }
+
+*/
 
 /// This function iterates through each pixel of our image vector,
 /// doing a basic color replacement and then diffusing the error throughout
@@ -191,6 +196,7 @@ fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB
 ///
 /// TODO: refactor this? There's a bit of a problem with how BIG this function is, and how slow it is.
 /// 
+
 fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     let mut wrapper_left = true;
     let mut wrapper_right = false;
