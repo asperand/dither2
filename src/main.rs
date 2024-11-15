@@ -178,8 +178,7 @@ fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_
     for i in 0..(image_rgb_vec.len()-1){ // For every pixel in the image
         let i_a = i as u32;
         let new_color = find_nearest_color(image_rgb_vec[i],user_palette.clone()); // find nearest color in palette
-        // TODO: FIX OVERFLOWING ON SUB, LIKELY ON ADD TOO
-        // We will make an "extention trait" for satsub() and satadd() according to IRC
+        image_rgb_vec[i] = new_color;
         let quant_err = image_rgb_vec[i].saturating_sub(new_color); // quant error calc
         if !wrapper_end { // if we are not at the bottom
             image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].saturating_add( // [x][y+1]
