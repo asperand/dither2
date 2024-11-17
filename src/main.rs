@@ -1,5 +1,5 @@
-use clap::Arg;
-use clap::ArgAction;
+// use clap::Arg;
+// use clap::ArgAction;
 use rgb::ComponentMap;
 use image::Rgb;
 use image::ImageBuffer;
@@ -10,7 +10,7 @@ use std::vec::Vec;
 use std::io;
 use rgb::RGB;
 use image::open;
-use clap::Parser;
+// use clap::Parser;
 
 /// Implementing saturating add and subtraction to RGB types. 
 /// This is done because the RGB crate only has non-saturating adds/subs which lead to overflows.
@@ -39,8 +39,12 @@ impl RgbSatSub for rgb::RGB<u8> {
         }
     }
 }
-/// TODO: Add flags for choosing dithering or simple color replacement. -fs or -cr ?
+
 fn main() {
+    /*
+
+    WIP, clap implementation
+
     let args = Commmand::new("Dither_2")
         .version("0.2")
         .about("Reduces the colors of an image according to the given algorithm.")
@@ -67,7 +71,7 @@ fn main() {
                 .value_parser(["cr","fs"])
             )
         .get_matches();
-
+    */ 
     let _args = std::env::args();
     let file_path = std::env::args().nth(1).expect("No image file provided");
     let palette_path = match std::env::args().nth(2) { // Check if palette file was provided.
