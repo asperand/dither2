@@ -1,3 +1,5 @@
+use clap::Arg;
+use clap::ArgAction;
 use rgb::ComponentMap;
 use image::Rgb;
 use image::ImageBuffer;
@@ -8,11 +10,11 @@ use std::vec::Vec;
 use std::io;
 use rgb::RGB;
 use image::open;
+use clap::Parser;
 
-/// Implementing saturating add and subtraction to
-/// RGB types. This is done because the RGB crate only
-/// has non-saturating adds/subs which leads to overflows
-/// relatively easily.
+/// Implementing saturating add and subtraction to RGB types. 
+/// This is done because the RGB crate only has non-saturating adds/subs which lead to overflows.
+
 trait RgbSatAdd {
   fn saturating_add(self, other: Self) -> Self;
 }
@@ -39,6 +41,33 @@ impl RgbSatSub for rgb::RGB<u8> {
 }
 /// TODO: Add flags for choosing dithering or simple color replacement. -fs or -cr ?
 fn main() {
+    let args = Commmand::new("Dither_2")
+        .version("0.2")
+        .about("Reduces the colors of an image according to the given algorithm.")
+        .arg(Arg::new("image")
+                .help("Path to image file")
+                .long("img")
+                .short("i")
+                .required(true)
+                .index(1)
+                .value_name("/PATH/TO/FILE")
+                .action(ArgAction::Set)
+            )
+        .arg(Arg::new("palette")
+                .help("Path to palette file")
+                .long("pal")
+                .short("p")
+                .required(false)
+                .index(2)
+                .value_name("/PATH/TO/PALLETE")
+                .action(ArgAction::Set)
+            )
+        .arg(Arg::new("Algorithm")
+                .help("Setting reduction algorithm")
+                .value_parser(["cr","fs"])
+            )
+        .get_matches();
+
     let _args = std::env::args();
     let file_path = std::env::args().nth(1).expect("No image file provided");
     let palette_path = match std::env::args().nth(2) { // Check if palette file was provided.
@@ -196,7 +225,6 @@ fn simple_color_replacement(image_rgb_vec:&mut Vec<RGB<u8>>,user_palette:Vec<RGB
 ///
 /// TODO: refactor this? There's a bit of a problem with how BIG this function is, and how slow it is.
 /// 
-
 fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_palette:Vec<RGB<u8>>) -> Vec<RGB<u8>> {
     let mut wrapper_left = true;
     let mut wrapper_right = false;
@@ -210,7 +238,7 @@ fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_
         let quant_err = image_rgb_vec[i].saturating_sub(new_color); // quant error calc
         image_rgb_vec[i] = new_color;
         if !wrapper_end { // if we are not at the bottom
-            image_rgb_vec[(i_a+width) as usize] = image_rgb_vec[(i_a+width) as usize].saturating_add( // [x][y+1]
+            image_rgb_vec[(i_a+width) as usize].saturating_add( // [x][y+1]
                 quant_err.map(|p| (p as f32 * (0.3125)).round() as u8)); // 5/16
         }
         if !wrapper_right { // if we are not at the rightmost end
@@ -218,11 +246,11 @@ fn dither_image_fs(image_rgb_vec:&mut Vec<RGB<u8>>, width:u32, height:u32, user_
                 quant_err.map(|p| (p as f32 * (0.4375)).round() as u8)); // 7/16
         }
         if !wrapper_right && !wrapper_end { // if we are either not at the rightmost end or at the bottom
-            image_rgb_vec[(i_a + (width+1)) as usize] = image_rgb_vec[(i_a + (width+1)) as usize].saturating_add( // [x+1][y+1]
+            image_rgb_vec[(i_a + (width+1)) as usize].saturating_add( // [x+1][y+1]
                 quant_err.map(|p| (p as f32 * (0.0625)).round() as u8)); // 1/16
         }
         if !wrapper_left && !wrapper_end { // if we are not at the leftmost end or at the bottom
-            image_rgb_vec[(i_a + (width-1)) as usize] = image_rgb_vec[(i_a + (width-1)) as usize].saturating_add( // [x-1][y+1]
+            image_rgb_vec[(i_a + (width-1)) as usize].saturating_add( // [x-1][y+1]
                 quant_err.map(|p| (p as f32 * (0.1875)).round() as u8)); // 3/16
         }
         if (i_a+1) % width == 0{ // we are at the left starting next loop
